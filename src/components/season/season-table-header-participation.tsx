@@ -15,7 +15,7 @@ function SeasonTableHeaderParticipation({
 }: {
   seriesTracks?: Record<string, number | number[]>;
 }) {
-  const { myTracks, wishTracks } = useIr();
+  const { myTracks, wishTracks, weekOffDates } = useIr();
   const { t } = useTranslation();
 
   const {
@@ -31,29 +31,30 @@ function SeasonTableHeaderParticipation({
       ),
     );
 
-    const tracks = Object.values(filteredTracks)
-      .map((trackId) => {
+    const tracks = Object.entries(filteredTracks)
+      .map(([week, trackId]) => {
         const track =
           TRACKS_JSON[
             (trackId as number).toString() as keyof typeof TRACKS_JSON
-          ];
-        return track;
+          ] as TContent | undefined;
+        return track ? { week: week.toString(), track } : undefined;
       })
-      .filter(Boolean) as TContent[];
+      .filter(Boolean) as { week: string; track: TContent }[];
 
     const tracksNeeded = Math.ceil(tracks.length * PARTICIPATION_THRESHOLD);
 
-    const ownedTracks = tracks.filter(
-      (track) =>
-        track.free ||
-        myTracks.includes(track.sku) ||
-        ownNurbCombined(track.id, myTracks),
-    ).length;
+    let ownedTracks = 0;
+    let wishedTracks = 0;
 
-    const wishedTracks = tracks.filter(
-      (track) =>
-        wishTracks.includes(track.sku) || ownNurbCombined(track.id, wishTracks),
-    ).length;
+    for (const { week, track } of tracks) {
+      if (weekOffDates.includes(week)) continue;
+
+      if (track.free || myTracks.includes(track.sku) || ownNurbCombined(track.id, myTracks)) {
+        ownedTracks++;
+      } else if (wishTracks.includes(track.sku) || ownNurbCombined(track.id, wishTracks)) {
+        wishedTracks++;
+      }
+    }
 
     return {
       ownedTracks,
