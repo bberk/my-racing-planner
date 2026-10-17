@@ -10,6 +10,80 @@ import { useTranslation } from "react-i18next";
 
 const PARTICIPATION_THRESHOLD = 0.66;
 
+export type TParticipationSummary = {
+  ownedTracks: number;
+  wishedTracks: number;
+  tracksNeeded: number;
+  enoughTracks: boolean;
+  enoughTracksWithWish: boolean;
+};
+
+/**
+ * Computes the participation credit summary for a series.
+ *
+ * A week's track counts as owned when it is free, owned by the user, or part
+ * of an owned Nurburgring combined package, and as wished when it is on the
+ * wishlist (but not already owned). Weeks marked as week off are skipped when
+ * counting owned/wished tracks, but still count towards `tracksNeeded`.
+ */
+export function calculateParticipation({
+  seriesTracks,
+  myTracks,
+  wishTracks,
+  weekOffDates,
+}: {
+  seriesTracks?: Record<string, number | number[]>;
+  myTracks: number[];
+  wishTracks: number[];
+  weekOffDates: string[];
+}): TParticipationSummary {
+  const filteredTracks = Object.fromEntries(
+    Object.entries(seriesTracks ?? {}).filter(
+      ([key]) => !key.includes("_cars") && !key.includes("_rainChance"),
+    ),
+  );
+
+  const tracks = Object.entries(filteredTracks)
+    .map(([week, trackId]) => {
+      const track = TRACKS_JSON[
+        (trackId as number).toString() as keyof typeof TRACKS_JSON
+      ] as TContent | undefined;
+      return track ? { week, track } : undefined;
+    })
+    .filter(Boolean) as { week: string; track: TContent }[];
+
+  const tracksNeeded = Math.ceil(tracks.length * PARTICIPATION_THRESHOLD);
+
+  let ownedTracks = 0;
+  let wishedTracks = 0;
+
+  for (const { week, track } of tracks) {
+    if (weekOffDates.includes(week)) continue;
+
+    if (
+      track.free ||
+      myTracks.includes(track.sku) ||
+      ownNurbCombined(track.id, myTracks)
+    ) {
+      ownedTracks++;
+    } else if (
+      wishTracks.includes(track.sku) ||
+      ownNurbCombined(track.id, wishTracks)
+    ) {
+      wishedTracks++;
+    }
+  }
+
+  return {
+    ownedTracks,
+    wishedTracks,
+    tracksNeeded,
+    enoughTracks: ownedTracks >= tracksNeeded,
+    enoughTracksWithWish:
+      ownedTracks < tracksNeeded && ownedTracks + wishedTracks >= tracksNeeded,
+  };
+}
+
 function SeasonTableHeaderParticipation({
   seriesTracks,
 }: {
@@ -24,48 +98,7 @@ function SeasonTableHeaderParticipation({
     tracksNeeded,
     enoughTracks,
     enoughTracksWithWish,
-  } = (() => {
-    const filteredTracks = Object.fromEntries(
-      Object.entries(seriesTracks ?? {}).filter(
-        ([key]) => !key.includes("_cars") && !key.includes("_rainChance"),
-      ),
-    );
-
-    const tracks = Object.entries(filteredTracks)
-      .map(([week, trackId]) => {
-        const track =
-          TRACKS_JSON[
-            (trackId as number).toString() as keyof typeof TRACKS_JSON
-          ] as TContent | undefined;
-        return track ? { week: week.toString(), track } : undefined;
-      })
-      .filter(Boolean) as { week: string; track: TContent }[];
-
-    const tracksNeeded = Math.ceil(tracks.length * PARTICIPATION_THRESHOLD);
-
-    let ownedTracks = 0;
-    let wishedTracks = 0;
-
-    for (const { week, track } of tracks) {
-      if (weekOffDates.includes(week)) continue;
-
-      if (track.free || myTracks.includes(track.sku) || ownNurbCombined(track.id, myTracks)) {
-        ownedTracks++;
-      } else if (wishTracks.includes(track.sku) || ownNurbCombined(track.id, wishTracks)) {
-        wishedTracks++;
-      }
-    }
-
-    return {
-      ownedTracks,
-      wishedTracks,
-      tracksNeeded,
-      enoughTracks: ownedTracks >= tracksNeeded,
-      enoughTracksWithWish:
-        ownedTracks < tracksNeeded &&
-        ownedTracks + wishedTracks >= tracksNeeded,
-    };
-  })();
+  } = calculateParticipation({ seriesTracks, myTracks, wishTracks, weekOffDates });
 
   const color = {
     base: enoughTracks

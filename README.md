@@ -68,6 +68,22 @@ To preview the production build locally:
 npm run preview
 ```
 
+### Running Tests
+
+The project uses [Vitest](https://vitest.dev/) for unit tests. Run the full suite once:
+
+```bash
+npm test
+```
+
+Run the tests in watch mode while developing:
+
+```bash
+npm run test:watch
+```
+
+Test files live in the `tests/` directory, and they are also run automatically on every pull request via GitHub Actions.
+
 ---
 
 ## Scripts for Data Fetching
